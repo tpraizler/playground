@@ -8,20 +8,31 @@ import org.elasticsearch.common.transport.InetSocketTransportAddress
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 
-import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 
 object Example {
   def main(args: Array[String]): Unit = {
-    val client = initClient("username", "password", "eu-west-1", "cluserId", 9343)
+    val client = initClient("username", "password", "eu-west-1", "clusterId", 9343)
+
+    val firstIndex = createIndex(client)
+    client.execute(index into firstIndex / "my_type" fields "name"->"coldplay").await
+    client.execute(index into firstIndex / "my_type" fields "name"->"coldplay").await
+    client.execute(index into firstIndex / "my_type" fields "name"->"coldplay").await
+
+    Thread.sleep(2000)
+    val searchResponse = client.execute(search in firstIndex / "my_type" query matchAllQuery).await
+    println(s"- Number of documents: ${searchResponse.totalHits}")
+    println(s"- Trying to reindex into new index")
+    val secondIndex = createIndex(client)
+
+    client.execute(reindex(firstIndex, secondIndex)).await
+  }
+
+  def createIndex(client:ElasticClient): String = {
     val newIndexName = "myindex" + "_" + DateTime.now().toString(DateTimeFormat.forPattern("yyyy-MM-dd_HH-mm-ss-SS"))
-
     println(s"- Creating new index - $newIndexName")
-    Await.result(client.execute(create index newIndexName), 5 seconds)
-
-    println(System.currentTimeMillis())
-    Await.result(client.execute(reindex("current_index_name", newIndexName)), 3 minutes)
+    client.execute(create index newIndexName).await
+    newIndexName
   }
 
   def initClient(username: String, password: String, region: String, clusterId: String, port: Int): ElasticClient = {
